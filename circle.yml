@@ -3,7 +3,7 @@ machine:
     - docker
 dependencies:
   post:
-    - docker build -t $DEV_AWS_ECR_URI:$CIRCLE_SHA1 .
+    - docker build -t  647433451523.dkr.ecr.ap-northeast-1.amazonaws.com/dockerbuild :$CIRCLE_SHA1 .
 deployment:
   prod:
     branch: master
