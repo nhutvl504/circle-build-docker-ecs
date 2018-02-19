@@ -11,7 +11,7 @@ deployment:
   prod:
     branch: master
     commands:
-      - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCircleCI -n "TestDocker" -i 'jp.fpt.ccg/test-circle:`git describe`'
+      - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCircleCI -n "TestDocker" -i 'jp.fpt.ccg/test-circle:lastest'
 test:
   pre:
     - aws configure list
