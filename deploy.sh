@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
-lsb_release -a
-ls -lsa
+
+cd ./eShopOnWeb/src/Web
+dotnet dotnet restore
+dotnet publish --configuration Release --output bin
 echo done
