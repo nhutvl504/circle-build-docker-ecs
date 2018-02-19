@@ -1,4 +1,4 @@
-FROM microsoft/dotnet:latest AS DEV-ENV
+FROM microsoft/dotnet:latest
 
 WORKDIR /app
 
