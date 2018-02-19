@@ -16,4 +16,4 @@ test:
   pre:
     - mkdir app
   override:
-    - echo "done"
+    - echo "done "
