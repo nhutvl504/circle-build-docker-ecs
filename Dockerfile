@@ -1,1 +1,1 @@
-FROM microsoft/dotnet:sdk AS build-env
+FROM microsoft/dotnet:sdk AS latest
