@@ -11,7 +11,7 @@ deployment:
   prod:
     branch: master
     commands:
-      - ls -lsa
+      - sh ./deploy.sh
 test:
   pre:
     - mkdir app
