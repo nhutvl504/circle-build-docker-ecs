@@ -240,11 +240,35 @@ function parseImageName() {
 }
 
 function getCurrentTaskDefinition() {
-    if [ $SERVICE != false ]; then
+    if [ "${SERVICES}" != false ]; then
       # Get current task definition name from service
-      TASK_DEFINITION_ARN=`$AWS_ECS describe-services --services $SERVICE --cluster $CLUSTER | jq -r .services[0].taskDefinition`
-      TASK_DEFINITION=`$AWS_ECS describe-task-definition --task-def $TASK_DEFINITION_ARN`
-    fi
+      TASK_DEFINITION_ARNS=`$AWS_ECS describe-services --services $SERVICES --cluster $CLUSTER --query 'services[].taskDefinition' | jq '.[]'`
+
+      family_prefixes=()
+      for TASK_DEFINITION_ARN in $TASK_DEFINITION_ARNS; do
+        echo "Discovered ${TASK_DEFINITION_ARN}"
+
+        family_prefix=${TASK_DEFINITION_ARN##*:task-definition/}
+        family_prefix=${family_prefix%*:[0-9]*}
+        family_prefixes+=($family_prefix)
+      done
+
+      unique_family_prefixes=($(printf "%s\n" "${family_prefixes[@]}" | sort -u))
+
+      # Error when more than one task definition - we won't know which to update
+      if [ ${#unique_family_prefixes[@]} -gt 1 ]; then
+        echo "Expected one task definition, but found ${#unique_family_prefixes}.  Only one task definition must be shared amongst services."
+        exit 14
+      fi
+
+      TASK_DEFINITION=`$AWS_ECS describe-task-definition --task-def ${TASK_DEFINITION_ARN//\"}`
+    elif [ $TASK_DEFINITION != false ]; then
+      # We need the actual task definition
+      TASK_DEFINITION=`$AWS_ECS describe-task-definition --task-def ${TASK_DEFINITION}`
+
+      # We know the task definition name (family) but not the ARN or the definition itself
+      TASK_DEFINITION_ARN=$( echo "${TASK_DEFINITION}" | jq '.taskDefinition.taskDefinitionArn' )
+fi
 }
 
 function createNewTaskDefJson() {
