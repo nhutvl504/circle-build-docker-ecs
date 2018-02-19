@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
 # Setup default values for variables
-VERSION="3.2.0"
 CLUSTER=false
-SERVICE=false
+SERVICES=false
 TASK_DEFINITION=false
 MAX_DEFINITIONS=0
 IMAGE=false
@@ -12,10 +11,18 @@ MAX=false
 TIMEOUT=90
 VERBOSE=false
 TAGVAR=false
-TAGONLY=""
-ENABLE_ROLLBACK=false
 AWS_CLI=$(which aws)
 AWS_ECS="$AWS_CLI --output json ecs"
+
+# Define regex for image name
+# This regex will create groups for:
+# - domain
+# - port
+# - repo
+# - image
+# - tag
+# If a group is missing it will be an empty string
+imageRegex="^([a-zA-Z0-9.\-]+):?([0-9]+)?/([a-zA-Z0-9._-]+)/?([a-zA-Z0-9._-]+)?:?([a-zA-Z0-9\._-]+)?$"
 
 function usage() {
     cat <<EOM
@@ -24,7 +31,7 @@ Simple script for triggering blue/green deployments on Amazon Elastic Container 
 https://github.com/silinternational/ecs-deploy
 
 One of the following is required:
-    -n | --service-name     Name of service to deploy
+    -n | --service-name     Name of service(s) to deploy
     -d | --task-definition  Name of task definition to deploy
 
 Required arguments:
@@ -45,11 +52,8 @@ Optional arguments:
     -M | --max              maximumPercent: The upper limit on the number of running tasks during a deployment.
     -t | --timeout          Default is 90s. Script monitors ECS Service for new task definition to be running.
     -e | --tag-env-var      Get image tag name from environment variable. If provided this will override value specified in image name argument.
-    -to | --tag-only        New tag to apply to all images defined in the task (multi-container task). If provided this will override value specified in image name argument.
     --max-definitions       Number of Task Definition Revisions to persist before deregistering oldest revisions.
-    --enable-rollback       Rollback task definition if new version is not running before TIMEOUT
     -v | --verbose          Verbose output
-         --version          Display the version
 
 Requirements:
     aws:  AWS Command Line Interface
@@ -72,12 +76,9 @@ Examples:
 
     ecs-deploy -p PROFILE -c production1 -n doorman-service -i docker.repo.com/doorman -t 240 -e CI_TIMESTAMP -v
 
-  Update just the tag on whatever image is found in ECS Task (supports multi-container tasks):
-
-    ecs-deploy -c staging -n core-service -to 0.1.899 -i ignore
-
 Notes:
-  - If a tag is not found in image and an ENV var is not used via -e and a tag is not provided with -to, it will default the tag to "latest"
+  - If a tag is not found in image and an ENV var is not used via -e, it will default the tag to "latest"
+  - Multiple serivces may be listed that share the same task.  However, separate invocations of this script should be used if there are more than one task definition.
 EOM
 
     exit 3
@@ -109,15 +110,15 @@ function assertRequiredArgumentsSet() {
               AWS_ECS="$AWS_ECS --profile $AWS_PROFILE"
     fi
 
-    if [ $SERVICE == false ] && [ $TASK_DEFINITION == false ]; then
-        echo "One of SERVICE or TASK DEFINITION is required. You can pass the value using -n / --service-name for a service, or -d / --task-definition for a task"
+    if [ "${SERVICES}" == false ] && [ $TASK_DEFINITION == false ]; then
+        echo "One of SERVICES or TASK DEFINITON is required. You can pass the value using -n / --service-name for a service, or -d / --task-definiton for a task"
         exit 5
     fi
-    if [ $SERVICE != false ] && [ $TASK_DEFINITION != false ]; then
-        echo "Only one of SERVICE or TASK DEFINITION may be specified, but you supplied both"
+    if [ "${SERVICES}" != false ] && [ $TASK_DEFINITION != false ]; then
+        echo "Only one of SERVICES or TASK DEFINITON may be specified, but you supplied both"
         exit 6
     fi
-    if [ $SERVICE != false ] && [ $CLUSTER == false ]; then
+    if [ "${SERVICES}" != false ] && [ $CLUSTER == false ]; then
         echo "CLUSTER is required. You can pass the value using -c or --cluster"
         exit 7
     fi
@@ -134,47 +135,30 @@ function assertRequiredArgumentsSet() {
 
 function parseImageName() {
 
-    # Define regex for image name
-    # This regex will create groups for:
-    # - domain
-    # - port
-    # - repo
-    # - image
-    # - tag
-    # If a group is missing it will be an empty string
-    if [[ "x$TAGONLY" == "x" ]]; then
-       imageRegex="^([a-zA-Z0-9\.\-]+):?([0-9]+)?/([a-zA-Z0-9\._\-]+)(/[\/a-zA-Z0-9\._\-]+)?:?([a-zA-Z0-9\._\-]+)?$"
-    else
-       imageRegex="^:?([a-zA-Z0-9\._-]+)?$"
-    fi
-
     if [[ $IMAGE =~ $imageRegex ]]; then
       # Define variables from matching groups
-      if [[ "x$TAGONLY" == "x" ]]; then
-        domain=${BASH_REMATCH[1]}
-        port=${BASH_REMATCH[2]}
-        repo=${BASH_REMATCH[3]}
-        img=${BASH_REMATCH[4]/#\//}
-        tag=${BASH_REMATCH[5]}
+      domain=${BASH_REMATCH[1]}
+      port=${BASH_REMATCH[2]}
+      repo=${BASH_REMATCH[3]}
+      img=${BASH_REMATCH[4]}
+      tag=${BASH_REMATCH[5]}
 
-        # Validate what we received to make sure we have the pieces needed
-        if [[ "x$domain" == "x" ]]; then
-          echo "Image name does not contain a domain or repo as expected. See usage for supported formats."
-          exit 10;
-        fi
-        if [[ "x$repo" == "x" ]]; then
-          echo "Image name is missing the actual image name. See usage for supported formats."
-          exit 11;
-        fi
-
-        # When a match for image is not found, the image name was picked up by the repo group, so reset variables
-        if [[ "x$img" == "x" ]]; then
-         img=$repo
-         repo=""
-        fi
-      else
-        tag=${BASH_REMATCH[1]}
+      # Validate what we received to make sure we have the pieces needed
+      if [[ "x$domain" == "x" ]]; then
+        echo "Image name does not contain a domain or repo as expected. See usage for supported formats."
+        exit 10;
       fi
+      if [[ "x$repo" == "x" ]]; then
+        echo "Image name is missing the actual image name. See usage for supported formats."
+        exit 11;
+      fi
+
+      # When a match for image is not found, the image name was picked up by the repo group, so reset variables
+      if [[ "x$img" == "x" ]]; then
+        img=$repo
+        repo=""
+      fi
+
     else
       # check if using root level repo with format like mariadb or mariadb:latest
       rootRepoRegex="^([a-zA-Z0-9\-]+):?([a-zA-Z0-9\.\-]+)?$"
@@ -204,33 +188,27 @@ function parseImageName() {
     fi
 
     # Reassemble image name
-    if [[ "x$TAGONLY" == "x" ]]; then
-
-      if [[ ! -z ${domain+undefined-guard} ]]; then
-        useImage="$domain"
+    if [[ ! -z ${domain+undefined-guard} ]]; then
+      useImage="$domain"
+    fi
+    if [[ ! -z ${port} ]]; then
+      useImage="$useImage:$port"
+    fi
+    if [[ ! -z ${repo+undefined-guard} ]]; then
+     if [[ ! "x$repo" == "x" ]]; then
+      useImage="$useImage/$repo"
+     fi
+    fi
+    if [[ ! -z ${img+undefined-guard} ]]; then
+      if [[ "x$useImage" == "x" ]]; then
+        useImage="$img"
+      else
+        useImage="$useImage/$img"
       fi
-      if [[ ! -z ${port} ]]; then
-        useImage="$useImage:$port"
-      fi
-      if [[ ! -z ${repo+undefined-guard} ]]; then
-       if [[ ! "x$repo" == "x" ]]; then
-        useImage="$useImage/$repo"
-       fi
-      fi
-      if [[ ! -z ${img+undefined-guard} ]]; then
-        if [[ "x$useImage" == "x" ]]; then
-          useImage="$img"
-        else
-          useImage="$useImage/$img"
-        fi
-      fi
-      imageWithoutTag="$useImage"
-      if [[ ! -z ${tag+undefined-guard} ]]; then
-        useImage="$useImage:$tag"
-      fi
-
-    else
-      useImage="$TAGONLY"
+    fi
+    imageWithoutTag="$useImage"
+    if [[ ! -z ${tag+undefined-guard} ]]; then
+      useImage="$useImage:$tag"
     fi
 
     # If in test mode output $useImage
@@ -262,32 +240,20 @@ function getCurrentTaskDefinition() {
       fi
 
       TASK_DEFINITION=`$AWS_ECS describe-task-definition --task-def ${TASK_DEFINITION_ARN//\"}`
-    elif [ $TASK_DEFINITION != false ]; then
-      # We need the actual task definition
-      TASK_DEFINITION=`$AWS_ECS describe-task-definition --task-def ${TASK_DEFINITION}`
-
-      # We know the task definition name (family) but not the ARN or the definition itself
-      TASK_DEFINITION_ARN=$( echo "${TASK_DEFINITION}" | jq '.taskDefinition.taskDefinitionArn' )
-fi
+    fi
 }
 
 function createNewTaskDefJson() {
     # Get a JSON representation of the current task definition
     # + Update definition to use new image name
     # + Filter the def
-    if [[ "x$TAGONLY" == "x" ]]; then
-      DEF=$( echo "$TASK_DEFINITION" \
+    DEF=$( echo "$TASK_DEFINITION" \
             | sed -e "s|\"image\": *\"${imageWithoutTag}:.*\"|\"image\": \"${useImage}\"|g" \
             | sed -e "s|\"image\": *\"${imageWithoutTag}\"|\"image\": \"${useImage}\"|g" \
             | jq '.taskDefinition' )
-    else
-      DEF=$( echo "$TASK_DEFINITION" \
-            | sed -e "s|\(\"image\": *\".*:\)\(.*\)\"|\1${useImage}\"|g" \
-            | jq '.taskDefinition' )
-    fi
 
     # Default JQ filter for new task definition
-    NEW_DEF_JQ_FILTER="family: .family, volumes: .volumes, containerDefinitions: .containerDefinitions, placementConstraints: .placementConstraints"
+    NEW_DEF_JQ_FILTER="family: .family, volumes: .volumes, containerDefinitions: .containerDefinitions"
 
     # Some options in task definition should only be included in new definition if present in
     # current definition. If found in current definition, append to JQ filter.
@@ -313,13 +279,7 @@ function registerNewTaskDefinition() {
     NEW_TASKDEF=`$AWS_ECS register-task-definition --cli-input-json "$NEW_DEF" | jq -r .taskDefinition.taskDefinitionArn`
 }
 
-function rollback() {
-    echo "Rolling back to ${TASK_DEFINITION_ARN}"
-    $AWS_ECS update-service --cluster $CLUSTER --service $SERVICE --task-definition $TASK_DEFINITION_ARN > /dev/null
-}
-
 function updateService() {
-    UPDATE_SERVICE_SUCCESS="false"
     DEPLOYMENT_CONFIG=""
     if [ $MAX != false ]; then
         DEPLOYMENT_CONFIG=",maximumPercent=$MAX"
@@ -337,10 +297,10 @@ function updateService() {
     fi
 
     # Update the service
-    UPDATE=`$AWS_ECS update-service --cluster $CLUSTER --service $SERVICE $DESIRED_COUNT --task-definition $NEW_TASKDEF $DEPLOYMENT_CONFIG`
+    UPDATE=`$AWS_ECS update-service --cluster $CLUSTER --service $1 $DESIRED_COUNT --task-definition $NEW_TASKDEF $DEPLOYMENT_CONFIG`
 
     # Only excepts RUNNING state from services whose desired-count > 0
-    SERVICE_DESIREDCOUNT=`$AWS_ECS describe-services --cluster $CLUSTER --service $SERVICE | jq '.services[]|.desiredCount'`
+    SERVICE_DESIREDCOUNT=`$AWS_ECS describe-services --cluster $CLUSTER --service $1 | jq '.services[]|.desiredCount'`
     if [ $SERVICE_DESIREDCOUNT -gt 0 ]; then
         # See if the service is able to come up again
         every=10
@@ -350,7 +310,7 @@ function updateService() {
             # Scan the list of running tasks for that service, and see if one of them is the
             # new version of the task definition
 
-            RUNNING_TASKS=$($AWS_ECS list-tasks --cluster "$CLUSTER"  --service-name "$SERVICE" --desired-status RUNNING \
+            RUNNING_TASKS=$($AWS_ECS list-tasks --cluster "$CLUSTER"  --service-name "$1" --desired-status RUNNING \
                 | jq -r '.taskArns[]')
 
             if [[ ! -z $RUNNING_TASKS ]] ; then
@@ -359,7 +319,7 @@ function updateService() {
                     | grep -e "RUNNING") || :
 
                 if [ "$RUNNING" ]; then
-                    echo "Service updated successfully, new task definition running.";
+                    echo "Service $1 updated successfully, new task definition running.";
 
                     if [[ $MAX_DEFINITIONS -gt 0 ]]; then
                         FAMILY_PREFIX=${TASK_DEFINITION_ARN##*:task-definition/}
@@ -378,8 +338,8 @@ function updateService() {
                         fi
 
                     fi
-                    UPDATE_SERVICE_SUCCESS="true"
-                    break
+
+                    return 0
                 fi
             fi
 
@@ -387,47 +347,12 @@ function updateService() {
             i=$(( $i + $every ))
         done
 
-        if [[ "${UPDATE_SERVICE_SUCCESS}" != "true" ]]; then
-            # Timeout
-            echo "ERROR: New task definition not running within $TIMEOUT seconds"
-            if [[ "${ENABLE_ROLLBACK}" != "false" ]]; then
-              rollback
-            fi
-            exit 1
-        fi
+        # Timeout
+        echo "ERROR: New task definition not running within $TIMEOUT seconds"
+        exit 1
     else
         echo "Skipping check for running task definition, as desired-count <= 0"
     fi
-}
-
-function waitForGreenDeployment {
-  DEPLOYMENT_SUCCESS="false"
-  every=2
-  i=0
-  echo "Waiting for service deployment to complete..."
-  while [ $i -lt $TIMEOUT ]
-  do
-    NUM_DEPLOYMENTS=$($AWS_ECS describe-services --services $SERVICE --cluster $CLUSTER | jq "[.services[].deployments[]] | length")
-
-    # Wait to see if more than 1 deployment stays running
-    # If the wait time has passed, we need to roll back
-    if [ $NUM_DEPLOYMENTS -eq 1 ]; then
-      echo "Service deployment successful."
-      DEPLOYMENT_SUCCESS="true"
-      # Exit the loop.
-      i=$TIMEOUT
-    else
-      sleep $every
-      i=$(( $i + $every ))
-    fi
-  done
-
-  if [[ "${DEPLOYMENT_SUCCESS}" != "true" ]]; then
-    if [[ "${ENABLE_ROLLBACK}" != "false" ]]; then
-      rollback
-    fi
-    exit 1
-  fi
 }
 
 ######################################################
@@ -477,7 +402,7 @@ if [ "$BASH_SOURCE" == "$0" ]; then
                 shift # past argument
                 ;;
             -n|--service-name)
-                SERVICE="$2"
+                SERVICES="$2"
                 shift # past argument
                 ;;
             -d|--task-definition)
@@ -508,23 +433,12 @@ if [ "$BASH_SOURCE" == "$0" ]; then
                 TAGVAR="$2"
                 shift
                 ;;
-            -to|--tag-only)
-                TAGONLY="$2"
-                shift
-                ;;
             --max-definitions)
                 MAX_DEFINITIONS="$2"
                 shift
                 ;;
-            --enable-rollback)
-                ENABLE_ROLLBACK=true
-                ;;
             -v|--verbose)
                 VERBOSE=true
-                ;;
-            --version)
-                echo ${VERSION}
-                exit 0
                 ;;
             *)
                 usage
@@ -557,16 +471,15 @@ if [ "$BASH_SOURCE" == "$0" ]; then
     echo "New task definition: $NEW_TASKDEF";
 
     # update service if needed
-    if [ $SERVICE == false ]; then
+    if [ "${SERVICES}" == false ]; then
         echo "Task definition updated successfully"
     else
-        updateService
-
-        waitForGreenDeployment
+        for SERVICE in $SERVICES; do
+          updateService $SERVICE
+        done
     fi
 
     exit 0
-
 fi
 #############################
 # End application run logic #
