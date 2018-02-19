@@ -9,6 +9,3 @@ deployment:
     branch: master
     commands:
       - cd eShopOnWeb/src/Web/ && ls -lsa && dotnet restore && dotnet publish --configuration Release --output bin
-test:
-  override:
-     - ls -lsa eShopOnWeb/src/bin/Release/netcoreapp2.0/
