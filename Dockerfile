@@ -1,10 +1,11 @@
-FROM microsoft/dotnet:latest
+FROM microsoft/dotnet:latest AS DEV-ENV
 
-RUN cd ~
-RUN ls -lsa
-RUN mkdir project && cd project
-RUN git clone https://github.com/nhutvl504/eShopOnWeb.git
-RUN cd eShopOnWeb/src/Web/
-RUN ls -lsa
-RUN dotnet restore 
-RUN dotnet publish --configuration Release --output bin
+WORKDIR /app
+
+# Copy csproj and restore as distinct layers
+COPY eShopOnWeb/src/Web/*.csproj ./
+RUN dotnet restore
+
+# Copy everything else and build
+COPY eShopOnWeb/src/Web/ ./
+RUN dotnet publish -c Release -o out
