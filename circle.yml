@@ -11,7 +11,7 @@ deployment:
   prod:
     branch: master
     commands:
-      - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCircleCI -d "TestDocker" -i '$DEV_AWS_ECR_URI:lastest'
+      - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCircleCI -n "TestDocker" -i '"$DEV_AWS_ECR_URI":lastest'
 test:
   pre:
     - aws configure list
