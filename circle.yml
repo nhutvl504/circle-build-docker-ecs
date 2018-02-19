@@ -1,3 +1,11 @@
 machine:
   services:
     - docker
+dependencies:
+  post:
+    - docker build -t $DEV_AWS_ECR_URI:$CIRCLE_SHA1 .
+deployment:
+  prod:
+    branch: master
+    commands:
+      - ./deploy.sh
