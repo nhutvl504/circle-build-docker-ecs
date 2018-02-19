@@ -8,4 +8,4 @@ deployment:
   prod:
     branch: master
     commands:
-      - cd eShopOnWeb/src/Web/ && ls -lsa && dotnet restore && dotnet publish --configuration Release --output bin
+      - ls -lsa
