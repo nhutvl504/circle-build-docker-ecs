@@ -1,6 +1,9 @@
 machine:
   services:
     - docker
+general:
+  artifacts:
+    - "app"
 dependencies:
   post:
     - docker build -t $DEV_AWS_ECR_URI:$CIRCLE_SHA1 .
