@@ -6,12 +6,13 @@ general:
     - "app"
 dependencies:
   post:
-    - docker build -t $DEV_AWS_ECR_URI:$CIRCLE_SHA1 .
+    - docker build -t $DEV_AWS_ECR_URI:latest .
 test:
   pre:
     - aws configure list
   - post:
-    - docker run -d -p 8080:8080 --name sample-go-webapp $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/testcirclecidocker:$CIRCLE_SHA1; sleep 10
+    - docker tag testcirclecidocker:latest $DEV_AWS_ECR_URI:latest
+    - docker push $DEV_AWS_ECR_URI:latest
   override:
     - echo "done "
 deployment:
