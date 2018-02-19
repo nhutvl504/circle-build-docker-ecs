@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 lsb_release -a
-mkdir app
+ls -lsa
 echo done
