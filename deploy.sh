@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 dotnet --version
 cd ./eShopOnWeb/src/Web
 dotnet dotnet restore
