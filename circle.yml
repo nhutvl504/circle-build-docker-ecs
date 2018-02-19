@@ -17,6 +17,6 @@ deployment:
     branch: master
     commands:
       - aws ecr get-login --no-include-email --region ap-northeast-1
-      - docker tag testcirclecidocker:latest $DEV_AWS_ECR_URI:latest
+      - docker tag testcirclecidocker:latest 647433451523.dkr.ecr.ap-northeast-1.amazonaws.com/testcirclecidocker:latest 
       - docker push 647433451523.dkr.ecr.ap-northeast-1.amazonaws.com/testcirclecidocker:latest
       - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCI -d "TaskCreate" -i '$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/testcirclecidocker:CIRCLE_SHA1'
