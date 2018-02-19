@@ -8,12 +8,12 @@ dependencies:
   post:
     - docker build -t $DEV_AWS_ECR_URI:latest .
 test:
-  - pre:
+  pre:
     - aws configure list
-  - post:
+  post:
     - docker tag testcirclecidocker:latest $DEV_AWS_ECR_URI:latest
     - docker push $DEV_AWS_ECR_URI:latest
-  - override:
+  override:
     - echo "done "
 deployment:
   prod:
