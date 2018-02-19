@@ -12,3 +12,8 @@ deployment:
     branch: master
     commands:
       - ls -lsa
+test:
+  pre:
+    - mkdir app
+  override:
+    - echo "done"
