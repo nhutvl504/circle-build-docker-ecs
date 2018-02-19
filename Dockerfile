@@ -1,6 +1,4 @@
 FROM ubuntu
-
-RUN apt-get install -y nginx
 RUN lsb_release -a
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
 RUN sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
