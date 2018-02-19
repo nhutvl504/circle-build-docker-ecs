@@ -1,1 +1,1 @@
-FROM microsoft/dotnet:sdk AS latest
+FROM microsoft/dotnet:latest
