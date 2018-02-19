@@ -12,7 +12,7 @@ deployment:
     branch: master
     commands:
       - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c -n "TestDocker" -i ignore
- test:
+test:
   pre:
     - aws configure list
   override:
