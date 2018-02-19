@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # Setup default values for variables
+VERSION="3.2.0"
 CLUSTER=false
 SERVICE=false
 TASK_DEFINITION=false
@@ -21,9 +22,11 @@ function usage() {
 ##### ecs-deploy #####
 Simple script for triggering blue/green deployments on Amazon Elastic Container Service
 https://github.com/silinternational/ecs-deploy
+
 One of the following is required:
     -n | --service-name     Name of service to deploy
     -d | --task-definition  Name of task definition to deploy
+
 Required arguments:
     -k | --aws-access-key        AWS Access Key ID. May also be set as environment variable AWS_ACCESS_KEY_ID
     -s | --aws-secret-key        AWS Secret Access Key. May also be set as environment variable AWS_SECRET_ACCESS_KEY
@@ -35,6 +38,7 @@ Required arguments:
                                  Examples: mariadb, mariadb:latest, silintl/mariadb,
                                            silintl/mariadb:latest, private.registry.com:8000/repo/image:tag
     --aws-instance-profile  Use the IAM role associated with this instance
+
 Optional arguments:
     -D | --desired-count    The number of instantiations of the task to place and keep running in your service.
     -m | --min              minumumHealthyPercent: The lower limit on the number of running tasks during a deployment.
@@ -45,20 +49,33 @@ Optional arguments:
     --max-definitions       Number of Task Definition Revisions to persist before deregistering oldest revisions.
     --enable-rollback       Rollback task definition if new version is not running before TIMEOUT
     -v | --verbose          Verbose output
+         --version          Display the version
+
 Requirements:
     aws:  AWS Command Line Interface
     jq:   Command-line JSON processor
+
 Examples:
   Simple deployment of a service (Using env vars for AWS settings):
+
     ecs-deploy -c production1 -n doorman-service -i docker.repo.com/doorman:latest
+
   All options:
+
     ecs-deploy -k ABC123 -s SECRETKEY -r us-east-1 -c production1 -n doorman-service -i docker.repo.com/doorman -t 240 -e CI_TIMESTAMP -v
+
   Updating a task definition with a new image:
+
     ecs-deploy -d open-door-task -i docker.repo.com/doorman:17
+
   Using profiles (for STS delegated credentials, for instance):
+
     ecs-deploy -p PROFILE -c production1 -n doorman-service -i docker.repo.com/doorman -t 240 -e CI_TIMESTAMP -v
+
   Update just the tag on whatever image is found in ECS Task (supports multi-container tasks):
+
     ecs-deploy -c staging -n core-service -to 0.1.899 -i ignore
+
 Notes:
   - If a tag is not found in image and an ENV var is not used via -e and a tag is not provided with -to, it will default the tag to "latest"
 EOM
@@ -93,11 +110,11 @@ function assertRequiredArgumentsSet() {
     fi
 
     if [ $SERVICE == false ] && [ $TASK_DEFINITION == false ]; then
-        echo "One of SERVICE or TASK DEFINITON is required. You can pass the value using -n / --service-name for a service, or -d / --task-definition for a task"
+        echo "One of SERVICE or TASK DEFINITION is required. You can pass the value using -n / --service-name for a service, or -d / --task-definition for a task"
         exit 5
     fi
     if [ $SERVICE != false ] && [ $TASK_DEFINITION != false ]; then
-        echo "Only one of SERVICE or TASK DEFINITON may be specified, but you supplied both"
+        echo "Only one of SERVICE or TASK DEFINITION may be specified, but you supplied both"
         exit 6
     fi
     if [ $SERVICE != false ] && [ $CLUSTER == false ]; then
@@ -246,7 +263,7 @@ function createNewTaskDefJson() {
     fi
 
     # Default JQ filter for new task definition
-    NEW_DEF_JQ_FILTER="family: .family, volumes: .volumes, containerDefinitions: .containerDefinitions"
+    NEW_DEF_JQ_FILTER="family: .family, volumes: .volumes, containerDefinitions: .containerDefinitions, placementConstraints: .placementConstraints"
 
     # Some options in task definition should only be included in new definition if present in
     # current definition. If found in current definition, append to JQ filter.
@@ -480,6 +497,10 @@ if [ "$BASH_SOURCE" == "$0" ]; then
                 ;;
             -v|--verbose)
                 VERBOSE=true
+                ;;
+            --version)
+                echo ${VERSION}
+                exit 0
                 ;;
             *)
                 usage
