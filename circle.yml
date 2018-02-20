@@ -17,4 +17,4 @@ deployment:
     branch: master
     commands:
       - sh ./push-ecr.sh
-      - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCI -d "TaskCreate" -i '$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/testcirclecidocker:CIRCLE_SHA1'
+      - bash ./ecs-deploy -k $AWS_ACCESS_KEY_ID -s $AWS_SECRET_ACCESS_KEY -r $AWS_DEFAULT_REGION -c TestCI -d "TaskCreate" -i $DEV_AWS_ECR_URI:$CIRCLE_SHA1
