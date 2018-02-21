@@ -1,5 +1,5 @@
 FROM microsoft/dotnet:latest
-
+RUN apt-get install -y nginx
 WORKDIR /app
 RUN curl https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy | tee -a /usr/bin/ecs-deploy
 RUN chmod +x /usr/bin/ecs-deploy
